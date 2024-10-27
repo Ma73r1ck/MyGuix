@@ -144,7 +144,7 @@
      (license (nonfree "https://www.google.com/intl/en/chrome/terms/")))))
 
 (define-public google-chrome-stable
-  (make-google-chrome "stable" "127.0.6533.99" "0n6dxjzvbc5p4nhpa9f68isgfvs42d59j4argkiga2xqm14qphd4"))
+  (make-google-chrome "stable" "130.0.6723.69" "3212da3d5d87b78658b26aece07598b6ffc816a0ff990559c00fc856765f343f"))
 
 (define-public google-chrome-beta
   (make-google-chrome "beta" "128.0.6613.27" "1v5p4zvln8yyh4622fla4hdpf5kfxlf1j3ydj8n2i2glb1vmmnrm"))
