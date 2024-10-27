@@ -1,0 +1,403 @@
+#+TITLE: Nonguix
+
+Nonguix is a software repository for the
+[[https://www.gnu.org/software/guix/][GNU Guix]] package manager,
+which packages some software which cannot be included in the official
+distribution for ethical or policy-related reasons.
+
+Please do NOT promote this repository on any official Guix
+communication channels, such as their mailing lists or IRC channel, even in
+response to support requests!  This is to show respect for the Guix project's
+[[http://www.gnu.org/distros/free-system-distribution-guidelines.html][strict policy]]
+against recommending nonfree software, and to avoid any unnecessary hostility.
+
+Before using this channel, you should understand the implications of using
+nonfree software.  Read [[https://www.gnu.org/philosophy/free-sw.en.html][What is free software?]]
+for more information.
+
+(Check out the [[https://gitlab.com/guix-gaming-channels][Guix Gaming Channels]]
+if you're interested in nonfree games too!)
+
+* Warning
+
+This channel does not endorse any non-free application.
+We believe it is non-ethical, harmful to software development and
+restricts the users freedom.
+See the [[https://www.gnu.org/philosophy/free-sw.en.html][GNU philosophy]] for a more thorough discussion.
+
+Those packages are provided as a last resort, should none of the official Guix
+packages work for you.
+
+You should understand the implication of using non-free software.  Some of those
+implications include:
+
+- Endorsement of non-free products and the perpetration of a culture of
+  restriction on liberties.
+
+- Non-free software cannot (or hardly) be audited: it can potentially spy on
+  you, destroy or steal your data.
+
+As a minimal security measure, it's heavily recommended to run any non-free
+software inside a container.
+
+* Installation
+
+Nonguix can be installed as a
+[[https://www.gnu.org/software/guix/manual/en/html_node/Channels.html][Guix channel]].
+To do so, add it to =~/.config/guix/channels.scm=:
+
+#+BEGIN_SRC scheme
+  (cons* (channel
+          (name 'nonguix)
+          (url "https://gitlab.com/nonguix/nonguix")
+          ;; Enable signature verification:
+          (introduction
+           (make-channel-introduction
+            "897c1a470da759236cc11798f4e0a5f7d4d59fbc"
+            (openpgp-fingerprint
+             "2A39 3FFF 68F4 EF7A 3D29  12AF 6F51 20A0 22FB B2D5"))))
+         %default-channels)
+#+END_SRC
+
+Then run =guix pull=.
+
+* Using Nonfree Firmware and Drivers
+
+To use Guix System with the standard Linux kernel and nonfree firmware, edit
+the ~kernel~ and ~firmware~ fields of the ~operating-system~ definition in
+=config.scm=:
+
+#+BEGIN_SRC scheme
+  ;; Import nonfree linux module.
+  (use-modules (nongnu packages linux)
+               (nongnu system linux-initrd))
+
+  (operating-system
+    (kernel linux)
+    (initrd microcode-initrd)
+    (firmware (list linux-firmware))
+    ...
+    )
+#+END_SRC
+
+If you only need firmware for a specific piece of hardware, you may be able to
+save disk space by using a smaller firmware package instead:
+
+#+BEGIN_SRC scheme
+  (firmware (cons* iwlwifi-firmware
+                   %base-firmware))
+#+END_SRC
+
+Then of course, run ~sudo guix system reconfigure /etc/config.scm~ to apply
+your configuration.
+
+** Installation image
+
+For some hardware the official Guix installation image won't do
+(e.g. unsupported wifi).  You can find a pre-generated installation image
+(time and version in line with upstream Guix), running the nonfree Linux
+kernel and nonfree firmware, on the [[https://gitlab.com/nonguix/nonguix/-/releases][Releases page]] (see below for important
+note if you use the 1.4.0 release or those created prior to April 2024).  Or,
+you can generate an installation image from a local checkout of this
+repository, at a more recent commit, with the following command:
+
+#+begin_src sh
+guix system image --image-type=iso9660 /path/to/this/channel/nongnu/system/install.scm
+#+end_src
+
+Like the official Guix installation image, this will produce a read-only image
+with any changes made stored in memory.  Alternatively, a writable image can
+be created with the following command:
+
+#+begin_src sh
+guix system image --image-size=7.2GiB /path/to/this/channel/nongnu/system/install.scm
+#+end_src
+
+The ~--image-size~ option allows you to specify the size of the image and, as
+such, to allocate free space to it.  The given value is purely indicative. It
+obviously depends on your thumbdrive capacity.
+
+Either type of image can be written to a USB thumbdrive with:
+
+#+BEGIN_SRC sh
+# NOTE: This example assumes your thumbdrive is recognized by Linux as /dev/sdb.
+dd if=/path/to/disk-image of=/dev/sdb bs=4M status=progress oflag=sync
+#+END_SRC
+
+*** Important note for 1.4.0
+The installation media for 1.4.0 or those produced manually before commit
+[[https://gitlab.com/nonguix/nonguix/-/commit/80b273e86a19ceaee6d9b6650ed56e853409a799#note_2075084624][80b273e8]] (April 2024) do not automatically configure your channels
+specification.  You need to add Nonguix "manually" into ~/etc/guix/channels.scm~
+and then run ~guix pull~ to make Guix aware of Nonguix scheme libraries. This
+will require enough memory to hold the cached channel code which can be
+several hundred megabytes. Below is Guile scheme code to include Nonguix in
+the channel specification.
+
+#+BEGIN_SRC scheme
+(use-modules (ice-9 pretty-print))
+(with-output-to-file "/etc/guix/channels.scm"
+  (lambda _
+    (pretty-print
+     '(cons*
+       (channel (name 'nonguix)
+		(url "https://gitlab.com/nonguix/nonguix"))
+       %default-channels))))
+#+END_SRC
+
+** CPU Microcode
+
+CPU microcode updates are nonfree blobs that apply directly to a processor to
+patch its behavior, and are therefore not included in upstream GNU Guix.
+However, running the latest microcode is important to avoid nasty CPU bugs and
+hardware security vulnerabilities.
+
+To enable early loading of CPU microcode, use the ~microcode-initrd~ function
+to add the microcode to the Initial RAM Disk.  Most users can simply import
+~(nongnu system linux-initrd)~ and add ~(initrd microcode-initrd)~ to their
+~operating-system~ definition, as illustrated above.
+
+If you need to customize the ~initrd~ for some reason, you should first
+understand the upstream documentation on
+[[https://guix.gnu.org/manual/en/html_node/Initial-RAM-Disk.html][Initial RAM Disks]].
+~microcode-initrd~ simply wraps another ~initrd~ function, which you can swap
+out for your own. For example, this:
+
+#+BEGIN_SRC scheme
+  (initrd microcode-initrd)
+#+END_SRC
+
+is exactly equivalent to:
+
+#+BEGIN_SRC scheme
+  (initrd (lambda (file-systems . rest)
+            (apply microcode-initrd file-systems
+                   #:initrd base-initrd
+                   #:microcode-packages (list amd-microcode
+                                              intel-microcode)
+                   rest)))
+#+END_SRC
+
+** Broadcom
+
+*** Wireless
+
+Some Broadcom wireless hardware requires a proprietary kernel module in
+addition to firmware. To use such hardware you will also need to add a service
+to load that module on boot and blacklist conflicting kernel modules:
+
+#+BEGIN_SRC scheme
+  (use-modules (nongnu packages linux))
+
+  (operating-system
+    (kernel linux)
+    ;; Blacklist conflicting kernel modules.
+    (kernel-arguments '("modprobe.blacklist=b43,b43legacy,ssb,bcm43xx,brcm80211,brcmfmac,brcmsmac,bcma"))
+    (kernel-loadable-modules (list broadcom-sta))
+    (firmware (cons* broadcom-bt-firmware
+                     %base-firmware))
+    ...)
+#+END_SRC
+
+*** Webcam
+
+Like Broadcom wireless hardware, the Broadcom 1570 PCIe webcam (better known as
+FacetimeHD and found in recent Macbooks) also requires a kernel module,
+firmware, and blacklisting of conflicting modules:
+
+#+BEGIN_SRC scheme
+  (use-modules (nongnu packages linux))
+  (use-modules (nongnu packages firmware))
+
+  (operating-system
+    (kernel-arguments '("modprobe.blacklist=bdc_pci"))
+    (kernel-loadable-modules (list facetimehd))
+    (firmware (cons* facetimehd-firmware
+                     facetimehd-calibration ; Optional but make the colors look better.
+                     %base-firmware))
+    (services
+     (cons* (simple-service 'facetimehd
+                            kernel-module-loader-service-type
+                            '("facetimehd"))
+            ...))
+    ...)
+#+END_SRC
+
+** NVIDIA graphics card
+
+NVIDIA graphics card support in Nonguix consists of a system service =nvidia-service-type= and a package =nvda= for application setup.
+
+The following code serves as an example for system setup:
+
+#+BEGIN_SRC scheme
+  (use-modules (gnu services gnome)
+               (gnu services xorg)
+               (nongnu packages nvidia)
+               (nongnu services nvidia))
+
+  (operating-system
+    (kernel-arguments '("modprobe.blacklist=nouveau"
+                        ;; Set this if the card is not used for displaying or
+                        ;; you're using Wayland:
+                        "nvidia_drm.modeset=1"))
+    (services
+     (cons* (service nvidia-service-type)
+            ;; Configure desktop environment, GNOME for example.
+            (service gnome-desktop-service-type
+                     ;; Enable NVIDIA support, only do this when the card is
+                     ;; used for displaying.
+                     (gnome-desktop-configuration
+                      (gnome (replace-mesa gnome))))
+            ;; Configure Xorg server, only do this when the card is used for
+            ;; displaying.
+            (set-xorg-configuration
+             (xorg-configuration
+              (modules (cons nvda %default-xorg-modules))
+              (drivers '("nvidia"))))
+            ...))
+    ...)
+#+END_SRC
+
+For application setup, =mesa= has to be replaced with =nvda= for every individual package that requires the NVIDIA driver, this can be done with grafting (which doesn't rebuild packages) or rewriting inputs (which rebuilds packages) (see [[https://guix.gnu.org/manual/devel/en/guix.html#Package-Transformation-Options][Package Transformation Options]] in GNU Guix Reference Manual).  For example:
+
+#+BEGIN_SRC shell
+  guix build mesa-utils --with-graft=mesa=nvda
+  guix build mesa-utils --with-input=mesa=nvda
+#+END_SRC
+
+The above transformation can be used within an one-off software environment spawned by =guix shell= as well, for correct environment variables, the =nvda= package may be added into the environment:
+
+#+BEGIN_SRC shell
+  guix shell mesa-utils nvda --with-graft=mesa=nvda \
+       -- glxinfo
+#+END_SRC
+
+To graft mesa with nvda programmatically, use =replace-mesa= defined in =(nongnu packages nvidia)=:
+
+#+BEGIN_SRC scheme
+  (use-modules (nongnu packages nvidia))
+
+  ;; Replace mesa with nvda for a single package.
+  (replace-mesa <some-package>)
+
+  ;; Replace mesa with nvda for a package list.
+  (map replace-mesa (list <some-package> ...))
+
+  ;; A package with mesa replaced is still a package, it can be part of a
+  ;; package list.
+  (list (replace-mesa <some-package>)
+        ...)
+#+END_SRC
+
+When the card is not used for displaying, environment variables =__GLX_VENDOR_LIBRARY_NAME=nvidia= and =__NV_PRIME_RENDER_OFFLOAD=1= may be set.
+
+** Substitutes for nonguix
+
+A Nonguix substitute server is available at [[https://substitutes.nonguix.org]].
+On Guix System, you can add and authorize this URL in the following way:
+#+BEGIN_SRC scheme
+(operating-system
+  (services (modify-services %desktop-services
+             (guix-service-type config => (guix-configuration
+               (inherit config)
+               (substitute-urls
+                (append (list "https://substitutes.nonguix.org")
+                  %default-substitute-urls))
+               (authorized-keys
+                (append (list (local-file "./signing-key.pub"))
+                  %default-authorized-guix-keys))))))
+  ...)
+#+END_SRC
+
+Notice that the URL of the server should be specified without a trailing
+slash.  The file ~signing-key.pub~ should be downloaded directly from
+[[https://substitutes.nonguix.org/signing-key.pub]].
+
+Alternatively, you can replace ~(local-file "./signing-key.pub")~ by:
+#+BEGIN_SRC scheme
+(plain-file "non-guix.pub"
+            "<contents of signing-key.pub>")
+#+END_SRC
+
+Guix System will only use the substitution server after it has been
+reconfigured.  The substitution server will therefore by default not
+be used the first time you run ~guix system reconfigure~ after adding
+the substitution server.  It is therefore recommended to explicitly
+specify the use of the substitution server the first time
+you reconfigure your system:
+#+BEGIN_SRC sh
+sudo guix archive --authorize < signing-key.pub
+sudo guix system reconfigure /etc/config.scm --substitute-urls='https://ci.guix.gnu.org https://bordeaux.guix.gnu.org https://substitutes.nonguix.org'
+#+END_SRC
+
+Check out the [[https://guix.gnu.org/manual/en/html_node/Substitutes.html][chapter on substitutes]]
+in the Guix manual for more details.
+
+** Pinning package versions
+
+When using substitutes is not an option, you may find
+that ~guix system reconfigure~ recompiles the kernel frequently due to version
+bumps in the kernel package. An inferior can be used to pin the kernel version
+and avoid lengthy rebuilds.
+
+You must pin both Guix and Nonguix, as the Nonguix kernel packages derive from
+those in Guix (so changes in either could cause a rebuild). Your preferred kernel
+version must be available in both pinned channels.
+
+Consult the output of ~guix system describe~ to get the commits of Guix and
+Nonguix for the current generation. Once you have determined the commits to use,
+create an inferior in your system configuration file that pins the channels to
+them. Then grab the appropriately-versioned Linux package from the inferior to
+use as your kernel.
+
+#+BEGIN_SRC scheme
+  (use-modules (srfi srfi-1)    ; for `first'
+               (guix channels))
+  (operating-system
+    (kernel
+      (let*
+        ((channels
+          (list (channel
+                 (name 'nonguix)
+                 (url "https://gitlab.com/nonguix/nonguix")
+                 (commit "ff6ca98099c7c90e64256236a49ab21fa96fe11e"))
+                (channel
+                 (name 'guix)
+                 (url "https://git.savannah.gnu.org/git/guix.git")
+                 (commit "3be96aa9d93ea760e2d965cb3ef03540f01a0a22"))))
+         (inferior
+          (inferior-for-channels channels)))
+        (first (lookup-inferior-packages inferior "linux" "5.4.21"))))
+    ...)
+#+END_SRC
+
+* Contributing
+
+Contributions are welcome!  If there's a package you would like to add, just
+fork the repository and create a Merge Request when your package is ready.
+Keep in mind:
+
+- Nonguix follows the same
+  [[https://www.gnu.org/software/guix/manual/en/html_node/Coding-Style.html][coding style]]
+  as GNU Guix.  If you don't use Emacs, you should make use of the indent
+  script from the GNU Guix repository (=./etc/indent-code.el=).
+- Commit messages should follow the same
+  [[https://www.gnu.org/prep/standards/html_node/Change-Logs.html][conventions]]
+  set by GNU Guix.
+- Although licensing restrictions are relaxed, packages should still have
+  accurate license metadata.
+- If a package could be added to upstream GNU Guix with a reasonable amount of
+  effort, then it probably doesn't belong in Nonguix.  This isn't a dumping
+  ground for subpar packages, but sometimes we may accept free software
+  packages which are currently too cumbersome to properly build from source.
+- If your package is a game, you should submit it to the
+  [[https://gitlab.com/guix-gaming-channels][Guix Gaming Channels]] instead.
+
+If you have a history of making quality contributions to GNU Guix or Nonguix
+and would like commit access, just ask!  Nontrivial changes should still go
+through a simple Merge Request and code review process, but Nonguix needs more
+people involved to succeed as a community project.
+
+* Community
+
+If you want to discuss Nonguix-related topics, you can hang out and stay in
+touch on the =#nonguix= IRC channel on [[https://libera.chat/][Libera Chat]].
